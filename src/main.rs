@@ -31,6 +31,18 @@ fn respond(line: &str) -> Result<bool, String> {
         println!("{}", output);
         return Ok(false);
     }
+    if let Some((_, arg)) = line.split_once("type ") {
+        match arg {
+            "echo" | "type" | "exit" => {
+                println!("{arg} is a shell builtin");
+                return Ok(false);
+            }
+            _ => {
+                println!("{arg}: not found");
+                return Ok(false);
+            }
+        }
+    }
     match line {
         "exit 0" => Ok(true),
         _ => Err(format!("{}: command not found\n", line)),
