@@ -12,7 +12,7 @@ fn main() -> Result<(), String> {
         match respond(line) {
             Ok(quit) => {
                 if quit {
-                    break;
+                    std::process::exit(0);
                 }
             }
             Err(err) => {
@@ -21,12 +21,13 @@ fn main() -> Result<(), String> {
             }
         }
     }
-
-    Ok(())
 }
 
 fn respond(line: &str) -> Result<bool, String> {
-    Err(format!("{}: command not found\n", line))
+    match line {
+        "exit 0" => Ok(true),
+        _ => Err(format!("{}: command not found\n", line)),
+    }
 }
 
 fn readline() -> Result<String, String> {
