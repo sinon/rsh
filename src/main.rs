@@ -24,6 +24,13 @@ fn main() -> Result<(), String> {
 }
 
 fn respond(line: &str) -> Result<bool, String> {
+    if line.starts_with("echo ") {
+        let (_, output) = line
+            .split_once("echo ")
+            .expect("Already performed a starts_with check");
+        println!("{}", output);
+        return Ok(false);
+    }
     match line {
         "exit 0" => Ok(true),
         _ => Err(format!("{}: command not found\n", line)),
