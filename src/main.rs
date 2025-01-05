@@ -1,7 +1,9 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use std::{collections::HashMap, env, os::unix::fs::PermissionsExt, path::Path};
 
 fn main() -> Result<(), String> {
+    let valid_bins = get_available_binaries();
     loop {
         let line = readline()?;
         let line = line.trim();
@@ -9,7 +11,7 @@ fn main() -> Result<(), String> {
             continue;
         }
 
-        match respond(line) {
+        match respond(line, &valid_bins) {
             Ok(quit) => {
                 if quit {
                     std::process::exit(0);
@@ -23,29 +25,60 @@ fn main() -> Result<(), String> {
     }
 }
 
-fn respond(line: &str) -> Result<bool, String> {
-    if line.starts_with("echo ") {
-        let (_, output) = line
-            .split_once("echo ")
-            .expect("Already performed a starts_with check");
-        println!("{}", output);
-        return Ok(false);
-    }
-    if let Some((_, arg)) = line.split_once("type ") {
-        match arg {
-            "echo" | "type" | "exit" => {
-                println!("{arg} is a shell builtin");
-                return Ok(false);
-            }
-            _ => {
-                println!("{arg}: not found");
-                return Ok(false);
+fn get_available_binaries() -> HashMap<String, String> {
+    let path = env::var("PATH").unwrap_or("".to_string());
+    let mut pathes: Vec<&Path> = path.split(":").map(|p| Path::new(p)).collect();
+    pathes.reverse();
+    let mut valid_bins: HashMap<String, String> = HashMap::new();
+    for p in pathes {
+        for f in p.read_dir().unwrap() {
+            match f {
+                Ok(a) => {
+                    let permissions = a.metadata().unwrap().permissions();
+                    let is_executable = permissions.mode() & 0o111 != 0;
+                    if is_executable {
+                        let path = format!("{}", a.path().display());
+                        valid_bins.insert(a.file_name().into_string().unwrap(), path);
+                    }
+                }
+                Err(_) => todo!(),
             }
         }
     }
-    match line {
-        "exit 0" => Ok(true),
-        _ => Err(format!("{}: command not found\n", line)),
+    valid_bins
+}
+
+fn respond(line: &str, valid_bins: &HashMap<String, String>) -> Result<bool, String> {
+    let mut parsed_args: Vec<&str> = Vec::new();
+    let mut command = line;
+    if let Some((c, args)) = line.split_once(" ") {
+        parsed_args = args.split(' ').collect::<Vec<&str>>();
+        command = c;
+    }
+    match command {
+        "echo" => {
+            println!("{}", parsed_args.join(" "));
+            return Ok(false);
+        }
+        "type" => match parsed_args[0] {
+            "echo" | "type" | "exit" => {
+                println!("{} is a shell builtin", parsed_args[0]);
+                return Ok(false);
+            }
+            _ => {
+                if let Some(p) = valid_bins.get(&parsed_args[0].to_string()) {
+                    println!("{} is {}", parsed_args[0], p);
+                    return Ok(false);
+                }
+                println!("{}: not found", parsed_args[0]);
+                return Ok(false);
+            }
+        },
+        "exit" => match parsed_args[0] {
+            "0" => return Ok(true),
+            _ => return Err(format!("{}: command not found\n", parsed_args[0])),
+        },
+        _ => return Err(format!("{}: command not found\n", command)),
     }
 }
 
