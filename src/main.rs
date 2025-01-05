@@ -58,7 +58,7 @@ fn echo(args: &[&str]) -> Result<bool, String> {
 
 fn type_cmd(args: &[&str]) -> Result<bool, String> {
     if args.len() < 1 {
-        return Err("type requires an argument".to_string());
+        return Err("type requires an argument\n".to_string());
     }
 
     if BUILTIN.contains(&args[0]) {
@@ -76,7 +76,7 @@ fn type_cmd(args: &[&str]) -> Result<bool, String> {
 
 fn exit(args: &[&str]) -> Result<bool, String> {
     if args.len() != 1 {
-        return Err("exit requires a single argument".to_string());
+        return Err("exit requires a single argument\n".to_string());
     }
     if args[0] == "0" {
         return Ok(true);
@@ -88,7 +88,19 @@ fn cd(args: &[&str]) -> Result<bool, String> {
     if args.len() < 1 {
         return Ok(false);
     }
-    let p = Path::new(args[0]);
+    let home = match env::var("HOME") {
+        Ok(h) => h,
+        Err(_) => "unset".to_string(),
+    };
+    let p = match args[0] {
+        "~" => {
+            if home == "unset" {
+                return Err("$HOME is not set".to_string());
+            }
+            Path::new(&home)
+        }
+        _ => Path::new(args[0]),
+    };
     match env::set_current_dir(p) {
         Ok(_) => return Ok(false),
         Err(_) => {
