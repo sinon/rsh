@@ -1,9 +1,8 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
-use std::{collections::HashMap, env, os::unix::fs::PermissionsExt, path::Path};
+use std::{env, path::PathBuf, process::Command};
 
 fn main() -> Result<(), String> {
-    let valid_bins = get_available_binaries();
     loop {
         let line = readline()?;
         let line = line.trim();
@@ -11,7 +10,7 @@ fn main() -> Result<(), String> {
             continue;
         }
 
-        match respond(line, &valid_bins) {
+        match respond(line) {
             Ok(quit) => {
                 if quit {
                     std::process::exit(0);
@@ -25,60 +24,56 @@ fn main() -> Result<(), String> {
     }
 }
 
-fn get_available_binaries() -> HashMap<String, String> {
-    let path = env::var("PATH").unwrap_or("".to_string());
-    let mut pathes: Vec<&Path> = path.split(":").map(|p| Path::new(p)).collect();
-    pathes.reverse();
-    let mut valid_bins: HashMap<String, String> = HashMap::new();
-    for p in pathes {
-        for f in p.read_dir().unwrap() {
-            match f {
-                Ok(a) => {
-                    let permissions = a.metadata().unwrap().permissions();
-                    let is_executable = permissions.mode() & 0o111 != 0;
-                    if is_executable {
-                        let path = format!("{}", a.path().display());
-                        valid_bins.insert(a.file_name().into_string().unwrap(), path);
-                    }
-                }
-                Err(_) => todo!(),
+fn find_command_exe(name: &str) -> Option<PathBuf> {
+    if let Ok(paths) = env::var("PATH") {
+        for path in env::split_paths(&paths) {
+            let command_path = path.join(name);
+
+            if command_path.is_file() {
+                return Some(command_path);
             }
         }
     }
-    valid_bins
+    None
 }
 
-fn respond(line: &str, valid_bins: &HashMap<String, String>) -> Result<bool, String> {
-    let mut parsed_args: Vec<&str> = Vec::new();
-    let mut command = line;
-    if let Some((c, args)) = line.split_once(" ") {
-        parsed_args = args.split(' ').collect::<Vec<&str>>();
-        command = c;
-    }
+fn respond(line: &str) -> Result<bool, String> {
+    let cmds: Vec<_> = line.split_whitespace().collect();
+    let command = cmds[0];
+    let args = &cmds[1..];
     match command {
         "echo" => {
-            println!("{}", parsed_args.join(" "));
+            println!("{}", args.join(" "));
             return Ok(false);
         }
-        "type" => match parsed_args[0] {
+        "type" => match args[0] {
             "echo" | "type" | "exit" => {
-                println!("{} is a shell builtin", parsed_args[0]);
+                println!("{} is a shell builtin", args[0]);
                 return Ok(false);
             }
             _ => {
-                if let Some(p) = valid_bins.get(&parsed_args[0].to_string()) {
-                    println!("{} is {}", parsed_args[0], p);
+                if let Some(p) = find_command_exe(args[0]) {
+                    println!("{} is {}", args[0], p.display());
                     return Ok(false);
                 }
-                println!("{}: not found", parsed_args[0]);
+                println!("{}: not found", args[0]);
                 return Ok(false);
             }
         },
-        "exit" => match parsed_args[0] {
+        "exit" => match args[0] {
             "0" => return Ok(true),
-            _ => return Err(format!("{}: command not found\n", parsed_args[0])),
+            _ => return Err(format!("{}: command not found\n", args[0])),
         },
-        _ => return Err(format!("{}: command not found\n", command)),
+        _ => {
+            if let Some(p) = find_command_exe(command) {
+                Command::new(p)
+                    .args(args)
+                    .status()
+                    .expect("failed to execute command");
+                return Ok(false);
+            }
+            return Err(format!("{}: command not found\n", command));
+        }
     }
 }
 
