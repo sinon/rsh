@@ -1,6 +1,12 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
-use std::{env, path::PathBuf, process::Command};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+static BUILTIN: &'static [&'static str] = &["pwd", "type", "echo", "exit", "cd"];
 
 fn main() -> Result<(), String> {
     loop {
@@ -37,9 +43,58 @@ fn find_command_exe(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn pwd() {
+fn pwd() -> Result<bool, String> {
     if let Ok(p) = env::current_dir() {
         println!("{}", p.display());
+        return Ok(false);
+    }
+    return Err("error in pwd".to_string());
+}
+
+fn echo(args: &[&str]) -> Result<bool, String> {
+    println!("{}", args.join(" "));
+    return Ok(false);
+}
+
+fn type_cmd(args: &[&str]) -> Result<bool, String> {
+    if args.len() < 1 {
+        return Err("type requires an argument".to_string());
+    }
+
+    if BUILTIN.contains(&args[0]) {
+        println!("{} is a shell builtin", args[0]);
+        return Ok(false);
+    }
+
+    if let Some(p) = find_command_exe(args[0]) {
+        println!("{} is {}", args[0], p.display());
+        return Ok(false);
+    }
+    println!("{}: not found", args[0]);
+    return Ok(false);
+}
+
+fn exit(args: &[&str]) -> Result<bool, String> {
+    if args.len() != 1 {
+        return Err("exit requires a single argument".to_string());
+    }
+    if args[0] == "0" {
+        return Ok(true);
+    }
+    return Err("Unknown exit code received in arg".to_string());
+}
+
+fn cd(args: &[&str]) -> Result<bool, String> {
+    if args.len() < 1 {
+        return Ok(false);
+    }
+    let p = Path::new(args[0]);
+    match env::set_current_dir(p) {
+        Ok(_) => return Ok(false),
+        Err(_) => {
+            println!("cd: {}: No such file or directory", args[0]);
+            return Ok(false);
+        }
     }
 }
 
@@ -47,44 +102,25 @@ fn respond(line: &str) -> Result<bool, String> {
     let cmds: Vec<_> = line.split_whitespace().collect();
     let command = cmds[0];
     let args = &cmds[1..];
-    match command {
-        "echo" => {
-            println!("{}", args.join(" "));
-            return Ok(false);
-        }
-        "pwd" => {
-            pwd();
-            Ok(false)
-        }
-        "type" => match args[0] {
-            "echo" | "type" | "exit" | "pwd" => {
-                println!("{} is a shell builtin", args[0]);
-                return Ok(false);
-            }
-            _ => {
-                if let Some(p) = find_command_exe(args[0]) {
-                    println!("{} is {}", args[0], p.display());
-                    return Ok(false);
-                }
-                println!("{}: not found", args[0]);
-                return Ok(false);
-            }
-        },
-        "exit" => match args[0] {
-            "0" => return Ok(true),
-            _ => return Err(format!("{}: command not found\n", args[0])),
-        },
-        _ => {
-            if let Some(p) = find_command_exe(command) {
-                Command::new(p)
-                    .args(args)
-                    .status()
-                    .expect("failed to execute command");
-                return Ok(false);
-            }
-            return Err(format!("{}: command not found\n", command));
+    if BUILTIN.contains(&command) {
+        match command {
+            "echo" => return echo(args),
+            "type" => return type_cmd(args),
+            "exit" => return exit(args),
+            "pwd" => return pwd(),
+            "cd" => return cd(args),
+            _ => unreachable!(),
         }
     }
+
+    if let Some(p) = find_command_exe(command) {
+        Command::new(p)
+            .args(args)
+            .status()
+            .expect("failed to execute command");
+        return Ok(false);
+    }
+    return Err(format!("{}: command not found\n", command));
 }
 
 fn readline() -> Result<String, String> {
