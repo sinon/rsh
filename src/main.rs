@@ -1,12 +1,11 @@
-#[allow(unused_imports)]
-use std::io::{self, Write};
+use std::io::Write;
 use std::{
     env,
     path::{Path, PathBuf},
     process::Command,
 };
 
-static BUILTIN: &'static [&'static str] = &["pwd", "type", "echo", "exit", "cd"];
+static BUILTIN: &[&str] = &["pwd", "type", "echo", "exit", "cd"];
 
 fn main() -> Result<(), String> {
     loop {
@@ -48,16 +47,16 @@ fn pwd() -> Result<bool, String> {
         println!("{}", p.display());
         return Ok(false);
     }
-    return Err("error in pwd".to_string());
+    Err("error in pwd".to_string())
 }
 
 fn echo(args: &[&str]) -> Result<bool, String> {
     println!("{}", args.join(" "));
-    return Ok(false);
+    Ok(false)
 }
 
 fn type_cmd(args: &[&str]) -> Result<bool, String> {
-    if args.len() < 1 {
+    if args.is_empty() {
         return Err("type requires an argument\n".to_string());
     }
 
@@ -71,7 +70,7 @@ fn type_cmd(args: &[&str]) -> Result<bool, String> {
         return Ok(false);
     }
     println!("{}: not found", args[0]);
-    return Ok(false);
+    Ok(false)
 }
 
 fn exit(args: &[&str]) -> Result<bool, String> {
@@ -81,11 +80,11 @@ fn exit(args: &[&str]) -> Result<bool, String> {
     if args[0] == "0" {
         return Ok(true);
     }
-    return Err("Unknown exit code received in arg".to_string());
+    Err("Unknown exit code received in arg".to_string())
 }
 
 fn cd(args: &[&str]) -> Result<bool, String> {
-    if args.len() < 1 {
+    if args.is_empty() {
         return Ok(false);
     }
     let home = match env::var("HOME") {
@@ -102,10 +101,10 @@ fn cd(args: &[&str]) -> Result<bool, String> {
         _ => Path::new(args[0]),
     };
     match env::set_current_dir(p) {
-        Ok(_) => return Ok(false),
+        Ok(_) => Ok(false),
         Err(_) => {
             println!("cd: {}: No such file or directory", args[0]);
-            return Ok(false);
+            Ok(false)
         }
     }
 }
@@ -132,7 +131,7 @@ fn respond(line: &str) -> Result<bool, String> {
             .expect("failed to execute command");
         return Ok(false);
     }
-    return Err(format!("{}: command not found\n", command));
+    Err(format!("{}: command not found\n", command))
 }
 
 fn readline() -> Result<String, String> {
