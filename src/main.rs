@@ -37,6 +37,12 @@ fn find_command_exe(name: &str) -> Option<PathBuf> {
     None
 }
 
+fn pwd() {
+    if let Ok(p) = env::current_dir() {
+        println!("{}", p.display());
+    }
+}
+
 fn respond(line: &str) -> Result<bool, String> {
     let cmds: Vec<_> = line.split_whitespace().collect();
     let command = cmds[0];
@@ -46,8 +52,12 @@ fn respond(line: &str) -> Result<bool, String> {
             println!("{}", args.join(" "));
             return Ok(false);
         }
+        "pwd" => {
+            pwd();
+            Ok(false)
+        }
         "type" => match args[0] {
-            "echo" | "type" | "exit" => {
+            "echo" | "type" | "exit" | "pwd" => {
                 println!("{} is a shell builtin", args[0]);
                 return Ok(false);
             }
