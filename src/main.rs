@@ -9,7 +9,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static SINGLE_QUOTE_GROUPS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"'([^']+)'|([\w\d\/~.-]+)").unwrap());
+    LazyLock::new(|| Regex::new(r#"'([^']+)'|"([^"]+)"|([\w\d\/~.-]+)"#).unwrap());
 static BUILTIN: &[&str] = &["pwd", "type", "echo", "exit", "cd"];
 
 fn main() -> Result<(), String> {
@@ -115,7 +115,7 @@ fn cd(args: &[&str]) -> Result<bool, String> {
 }
 
 fn clean_commas(line: &str) -> String {
-    line.replace("''", "")
+    line.replace("''", "").replace("\"\"", "")
 }
 
 fn parse_cmd_args(line: &str) -> Result<(&str, Vec<&str>), String> {
@@ -126,6 +126,7 @@ fn parse_cmd_args(line: &str) -> Result<(&str, Vec<&str>), String> {
                 captures
                     .get(1)
                     .or_else(|| captures.get(2))
+                    .or_else(|| captures.get(3))
                     .map(|m| m.as_str())
             })
             .collect();
@@ -180,6 +181,7 @@ mod tests {
     #[rstest]
     #[case("echo script     shell", ("echo", vec!["script", "shell"]))]
     #[case("echo 'world     hello' 'shell''example'", ("echo", vec!["world     hello", "shellexample"]))]
+    #[case("echo \"world     hello\" \"shell\"\"example\"", ("echo", vec!["world     hello", "shellexample"]))]
     #[case("cd /tmp/blueberry/pineapple/apple", ("cd", vec!["/tmp/blueberry/pineapple/apple"]))]
     #[case("pwd", ("pwd", vec![]))]
     #[case("cd ~", ("cd", vec!["~"]))]
