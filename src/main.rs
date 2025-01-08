@@ -5,6 +5,11 @@ use std::{
     process::Command,
 };
 
+use regex::Regex;
+use std::sync::LazyLock;
+
+static SINGLE_QUOTE_GROUPS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"'([^']+)'|([\w\d\/~.-]+)").unwrap());
 static BUILTIN: &[&str] = &["pwd", "type", "echo", "exit", "cd"];
 
 fn main() -> Result<(), String> {
@@ -80,7 +85,7 @@ fn exit(args: &[&str]) -> Result<bool, String> {
     if args[0] == "0" {
         return Ok(true);
     }
-    Err("Unknown exit code received in arg".to_string())
+    Err("Unknown exit code received in arg\n".to_string())
 }
 
 fn cd(args: &[&str]) -> Result<bool, String> {
@@ -109,26 +114,49 @@ fn cd(args: &[&str]) -> Result<bool, String> {
     }
 }
 
+fn clean_commas(line: &str) -> String {
+    line.replace("''", "")
+}
+
+fn parse_cmd_args(line: &str) -> Result<(&str, Vec<&str>), String> {
+    let (command, args) = if let Some((command, rest)) = line.split_once(" ") {
+        let split_rest: Vec<&str> = SINGLE_QUOTE_GROUPS
+            .captures_iter(rest)
+            .filter_map(|captures| {
+                captures
+                    .get(1)
+                    .or_else(|| captures.get(2))
+                    .map(|m| m.as_str())
+            })
+            .collect();
+        (command, split_rest)
+    } else {
+        (line, Vec::new())
+    };
+    Ok((command, args))
+}
+
 fn respond(line: &str) -> Result<bool, String> {
-    let cmds: Vec<_> = line.split_whitespace().collect();
-    let command = cmds[0];
-    let args = &cmds[1..];
+    let line = clean_commas(line);
+    let (command, args) = parse_cmd_args(&line)?;
     if BUILTIN.contains(&command) {
         match command {
-            "echo" => return echo(args),
-            "type" => return type_cmd(args),
-            "exit" => return exit(args),
+            "echo" => return echo(&args),
+            "type" => return type_cmd(&args),
+            "exit" => return exit(&args),
             "pwd" => return pwd(),
-            "cd" => return cd(args),
+            "cd" => return cd(&args),
             _ => unreachable!(),
         }
     }
 
     if let Some(p) = find_command_exe(command) {
-        Command::new(p)
-            .args(args)
-            .status()
-            .expect("failed to execute command");
+        if let Some(name) = p.file_name() {
+            Command::new(name)
+                .args(args)
+                .status()
+                .expect("failed to execute command");
+        }
         return Ok(false);
     }
     Err(format!("{}: command not found\n", command))
@@ -142,4 +170,41 @@ fn readline() -> Result<String, String> {
         .read_line(&mut buffer)
         .map_err(|e| e.to_string())?;
     Ok(buffer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("echo script     shell", ("echo", vec!["script", "shell"]))]
+    #[case("echo 'world     hello' 'shell''example'", ("echo", vec!["world     hello", "shellexample"]))]
+    #[case("cd /tmp/blueberry/pineapple/apple", ("cd", vec!["/tmp/blueberry/pineapple/apple"]))]
+    #[case("pwd", ("pwd", vec![]))]
+    #[case("cd ~", ("cd", vec!["~"]))]
+    #[case("cd ./raspberry/raspberry", ("cd", vec!["./raspberry/raspberry"]))]
+    #[case("cd /non-existing-directory", ("cd", vec!["/non-existing-directory"]))]
+    #[case("custom_exe_6510 Alice", ("custom_exe_6510", vec!["Alice"]))]
+    fn test_cmd_arg_parsing(
+        #[case] input: &str,
+        #[case] expected: (&str, Vec<&str>),
+    ) -> Result<(), String> {
+        let cleaned_input = clean_commas(input);
+        let (cmd, args) = parse_cmd_args(&cleaned_input)?;
+        assert_eq!(cmd, expected.0);
+        assert_eq!(args, expected.1);
+        Ok(())
+    }
+
+    #[rstest]
+    #[case("cat", "/bin/cat")]
+    fn test_find_command_exe(
+        #[case] input: &str,
+        #[case] expected_output: &str,
+    ) -> Result<(), String> {
+        let p = find_command_exe(input).unwrap();
+        assert_eq!(p.display().to_string(), expected_output.to_string());
+        Ok(())
+    }
 }
