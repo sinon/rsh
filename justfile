@@ -5,9 +5,9 @@ format:
 	@cargo fmt --version
 	cargo fmt
 lint:
-	@cargo clippy --version
-	cargo clippy -- -D warnings
-	cargo doc
+    @cargo clippy --version
+    cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery
+    cargo doc
 test:
     cargo nextest run
 

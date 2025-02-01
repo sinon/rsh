@@ -6,4 +6,4 @@
 #
 # Learn more: https://codecrafters.io/program-interface
 
-exec /tmp/codecrafters-build-shell-rust/release/codecrafters-shell "$@"
+exec /tmp/codecrafters-build-shell-rust/release/rsh "$@"
