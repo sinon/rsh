@@ -6,6 +6,9 @@ enum LexerState {
     InDoubleQuote,
 }
 
+/// # Errors
+///
+/// Will return `Err` if there are unterminated quotes
 pub fn lex(input: &str) -> Result<Vec<String>, String> {
     let mut tokens = Vec::new();
     let mut current_token = String::new();

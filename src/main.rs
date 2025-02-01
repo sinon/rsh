@@ -30,9 +30,9 @@ fn respond(line: &str) -> Result<bool, String> {
     let mut lexed_args = lex(line)?;
     let command = lexed_args[0].clone();
     let args = lexed_args.split_off(1);
-    if BUILTIN.contains(&&command.as_ref()) {
+    if BUILTIN.contains(&command.as_ref()) {
         match command.as_ref() {
-            "echo" => return echo(&args),
+            "echo" => return Ok(echo(&args)),
             "type" => return type_cmd(&args),
             "exit" => return exit(&args),
             "pwd" => return pwd(),
@@ -50,7 +50,7 @@ fn respond(line: &str) -> Result<bool, String> {
         }
         return Ok(false);
     }
-    Err(format!("{}: command not found\n", command))
+    Err(format!("{command}: command not found\n"))
 }
 
 fn readline() -> Result<String, String> {

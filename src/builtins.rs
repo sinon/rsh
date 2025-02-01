@@ -5,6 +5,9 @@ use std::{
 
 pub static BUILTIN: &[&str] = &["pwd", "type", "echo", "exit", "cd"];
 
+/// # Errors
+///
+/// Will return `Err` if fails to retrieve the `current_dir`
 pub fn pwd() -> Result<bool, String> {
     if let Ok(p) = env::current_dir() {
         println!("{}", p.display());
@@ -13,12 +16,17 @@ pub fn pwd() -> Result<bool, String> {
     Err("error in pwd".to_string())
 }
 
+/// # Errors
+///
+/// Will return `Err` if:
+///     - not enough arguments passed
+///     - no matching command is found
 pub fn type_cmd(args: &[String]) -> Result<bool, String> {
     if args.is_empty() {
         return Err("type requires an argument\n".to_string());
     }
 
-    if BUILTIN.contains(&&args[0].as_ref()) {
+    if BUILTIN.contains(&args[0].as_ref()) {
         println!("{} is a shell builtin", args[0]);
         return Ok(false);
     }
@@ -31,11 +39,18 @@ pub fn type_cmd(args: &[String]) -> Result<bool, String> {
     Ok(false)
 }
 
-pub fn echo(args: &[String]) -> Result<bool, String> {
+#[must_use]
+pub fn echo(args: &[String]) -> bool {
     println!("{}", args.join(" "));
-    Ok(false)
+    false
 }
 
+/// # Errors
+///
+/// Will return `Err` if:
+///     - `args` is empty
+///     - An supported exit code is passed in `args`
+/// permission to read it.
 pub fn exit(args: &[String]) -> Result<bool, String> {
     if args.len() != 1 {
         return Err("exit requires a single argument\n".to_string());
@@ -46,14 +61,16 @@ pub fn exit(args: &[String]) -> Result<bool, String> {
     Err("Unknown exit code received in arg\n".to_string())
 }
 
+/// # Errors
+///
+/// Will return `Err` if:
+///     - `$HOME` is not set
+/// permission to read it.
 pub fn cd(args: &[String]) -> Result<bool, String> {
     if args.is_empty() {
         return Ok(false);
     }
-    let home = match env::var("HOME") {
-        Ok(h) => h,
-        Err(_) => "unset".to_string(),
-    };
+    let home = env::var("HOME").unwrap_or_else(|_| "unset".to_string());
     let p = match args[0].as_ref() {
         "~" => {
             if home == "unset" {
@@ -63,15 +80,13 @@ pub fn cd(args: &[String]) -> Result<bool, String> {
         }
         _ => Path::new(&args[0]),
     };
-    match env::set_current_dir(p) {
-        Ok(_) => Ok(false),
-        Err(_) => {
-            println!("cd: {}: No such file or directory", args[0]);
-            Ok(false)
-        }
+    if !matches!(env::set_current_dir(p), Ok(())) {
+        println!("cd: {}: No such file or directory", args[0]);
     }
+    Ok(false)
 }
 
+#[must_use]
 pub fn find_command_exe(name: &String) -> Option<PathBuf> {
     if let Ok(paths) = env::var("PATH") {
         for path in env::split_paths(&paths) {
